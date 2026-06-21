@@ -7,23 +7,50 @@ interface ContactFormProps {
 
 export default function ContactForm({ dark = false }: ContactFormProps) {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ name: '', phone: '', email: '', message: '' })
   const [errors, setErrors] = useState<{ name?: string; email?: string }>({})
+  const [loading, setLoading] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
-  const validate = () => {
+  const validate = (data: FormData) => {
     const e: { name?: string; email?: string } = {}
-    if (!form.name.trim()) e.name = 'Name is required.'
-    if (!form.email.trim()) e.email = 'Email is required.'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email.'
+    if (!String(data.get('name')).trim()) e.name = 'Name is required.'
+    const email = String(data.get('email')).trim()
+    if (!email) e.email = 'Email is required.'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = 'Enter a valid email.'
     return e
   }
 
-  const handleSubmit = (ev: React.FormEvent) => {
+  const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
     ev.preventDefault()
-    const e = validate()
+    setSubmitError('')
+
+    const formData = new FormData(ev.currentTarget)
+    const e = validate(formData)
     if (Object.keys(e).length) { setErrors(e); return }
     setErrors({})
-    navigate('/thank-you')
+    setLoading(true)
+
+    formData.append('access_key', '9c55f2d3-254c-4284-a542-363c5973a596')
+    formData.append('subject', 'New Appointment Request – Mirra Periodontal & Implant Center')
+    formData.append('from_name', 'Mirra Website')
+
+    try {
+      const res = await fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      console.log('Web3Forms response:', data)
+      if (data.success) {
+        navigate('/thank-you')
+      } else {
+        setSubmitError(`Error: ${data.message || 'Something went wrong. Please try again.'}`)
+      }
+    } catch {
+      setSubmitError('Network error. Please check your connection and try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const inputStyle: React.CSSProperties = {
@@ -58,14 +85,14 @@ export default function ContactForm({ dark = false }: ContactFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate style={{ width: '100%' }}>
+    <form onSubmit={onSubmit} noValidate style={{ width: '100%' }}>
+
       <div className="contact-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div>
           <label style={labelStyle}>Name *</label>
           <input
             type="text"
-            value={form.name}
-            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            name="name"
             placeholder="Your full name"
             style={inputStyle}
           />
@@ -75,8 +102,7 @@ export default function ContactForm({ dark = false }: ContactFormProps) {
           <label style={labelStyle}>Phone</label>
           <input
             type="tel"
-            value={form.phone}
-            onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+            name="phone"
             placeholder="(817) 000-0000"
             style={inputStyle}
           />
@@ -87,8 +113,7 @@ export default function ContactForm({ dark = false }: ContactFormProps) {
         <label style={labelStyle}>Email *</label>
         <input
           type="email"
-          value={form.email}
-          onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+          name="email"
           placeholder="your@email.com"
           style={inputStyle}
         />
@@ -98,22 +123,41 @@ export default function ContactForm({ dark = false }: ContactFormProps) {
       <div style={{ marginBottom: 20 }}>
         <label style={labelStyle}>Message</label>
         <textarea
-          value={form.message}
-          onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
+          name="message"
           placeholder="How can we help you?"
           rows={5}
           style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
         />
       </div>
 
+      {submitError && (
+        <p style={{ ...errorStyle, marginBottom: 12, fontSize: '0.9rem' }}>{submitError}</p>
+      )}
+
       <button
         type="submit"
-        style={{ background: '#b02855', color: '#fff', padding: '13px 36px', fontFamily: "'Raleway', sans-serif", fontWeight: 700, fontSize: '0.9rem', letterSpacing: '0.1em', textTransform: 'uppercase', border: 'none', borderRadius: 4, cursor: 'pointer', transition: 'background 0.2s', width: '100%' }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#8e1f42')}
-        onMouseLeave={e => (e.currentTarget.style.background = '#b02855')}
+        disabled={loading}
+        style={{
+          background: loading ? '#888' : '#b02855',
+          color: '#fff',
+          padding: '13px 36px',
+          fontFamily: "'Raleway', sans-serif",
+          fontWeight: 700,
+          fontSize: '0.9rem',
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          border: 'none',
+          borderRadius: 4,
+          cursor: loading ? 'not-allowed' : 'pointer',
+          transition: 'background 0.2s',
+          width: '100%',
+        }}
+        onMouseEnter={e => { if (!loading) e.currentTarget.style.background = '#8e1f42' }}
+        onMouseLeave={e => { if (!loading) e.currentTarget.style.background = '#b02855' }}
       >
-        Send Message
+        {loading ? 'Sending…' : 'Send Message'}
       </button>
+
       <style>{`
         @media (max-width: 540px) {
           .contact-form-grid { grid-template-columns: 1fr !important; }
